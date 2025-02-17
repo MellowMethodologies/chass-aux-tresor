@@ -33,6 +33,7 @@ class TreasureHuntMonitor:
             'indices': {"top": 250, "left": 1, "width": 322, "height": 500}
         }
         self.icon_template = cv2.imread("../screens/pin.png")
+
         self.top_arrow = cv2.imread("../screens/arrows/top.png")
         self.bottom_arrow = cv2.imread("../screens/arrows/down.png")
         self.left_arrow = cv2.imread("../screens/arrows/left.png")
@@ -43,7 +44,7 @@ class TreasureHuntMonitor:
         try:
             result = cv2.matchTemplate(screenshot, arrow_template, method)
             min_val, _, min_loc, _ = cv2.minMaxLoc(result)
-            print(min_loc)
+            print(f"Min value: {min_val}")
             return min_val < threshold, min_loc
         except Exception as e:
             print(f"Detection error: {e}")
@@ -55,7 +56,7 @@ class TreasureHuntMonitor:
                 if not self.screenshot_queue.empty():
                     screenshot = self.screenshot_queue.get()
                     
-                    icon_detected, loc = self.detect_image(screenshot, self.icon_template, 0.4)
+                    icon_detected, loc = self.detect_image(screenshot, self.icon_template, 0.1)
 
                     # Process regions in color
                     player_pos = parse_coordinates(self.process_region(screenshot, 'player_pos'))
@@ -69,8 +70,8 @@ class TreasureHuntMonitor:
 
                     # Adjusted arrow detection region (0-40 width, same Y-axis)
                     arrow_region = screenshot[
-                        max(0, icon_y-20):min(screenshot.shape[0], icon_y+20),
-                        0:40  # Fixed left 40px width
+                        icon_y - 20: icon_y + 30,
+                        0:40 
                     ]
                     
                     # Arrow detection
@@ -80,13 +81,14 @@ class TreasureHuntMonitor:
                                       (self.right_arrow, "right")]:
                         detected, _ = self.detect_image(arrow_region, arrow, 0.1)
                         if detected:
+                            print(f"{name} arrow detected: {_}")
                             arrow_pos = name
                             break
 
                     # Indices processing
                     indices_roi = screenshot[
                         max(0, icon_y-10):min(screenshot.shape[0], icon_y+20),
-                        37:187  # Adjusted indices region
+                        37:150  # Adjusted indices region
                     ]
                     indices = self.process_region_image(indices_roi)
                 else:
