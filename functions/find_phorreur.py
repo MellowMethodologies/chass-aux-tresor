@@ -1,0 +1,1 @@
+# the phorreur can't be traced from the api, check if you can find it with just using locateonscreen (its usully 10 maps away so check going with the player back and forth)
