@@ -3,27 +3,19 @@ import numpy as np
 from mss import mss
 import pytesseract
 import time
-import threading
-from queue import Queue
 import hashlib
 import re
 
 method = cv2.TM_SQDIFF_NORMED  # Using squared difference normalized method
 
-def parse_coordinates( input_string):
+def parse_coordinates(input_string):
     numbers = re.findall(r'-?\d+', input_string)
-        
-    if len(numbers) >= 2:
-        return (int(numbers[0]), int(numbers[1]))
-        
-    return None  
+    return (int(numbers[0]), int(numbers[1])) if len(numbers) >= 2 else None
 
 class TreasureHuntMonitor:
     def __init__(self):
         self.sct = mss()
-        self.screenshot_queue = Queue(maxsize=1)
         self.result_cache = {}
-        self.running = True
         self.last_hash = None
         
         # Define regions of interest
@@ -32,99 +24,74 @@ class TreasureHuntMonitor:
             'depart': {"top": 227, "left": 30, "width": 250, "height": 44},
             'indices': {"top": 250, "left": 1, "width": 322, "height": 500}
         }
+        
+        # Load arrow templates
         self.icon_template = cv2.imread("../screens/pin.png")
+        self.arrows = {
+            'top': cv2.imread("../screens/arrows/top.png"),
+            'down': cv2.imread("../screens/arrows/down.png"),
+            'left': cv2.imread("../screens/arrows/left.png"),
+            'right': cv2.imread("../screens/arrows/right.png")
+        }
 
-        self.top_arrow = cv2.imread("../screens/arrows/top.png")
-        self.bottom_arrow = cv2.imread("../screens/arrows/down.png")
-        self.left_arrow = cv2.imread("../screens/arrows/left.png")
-        self.right_arrow = cv2.imread("../screens/arrows/right.png")
-
-
-    def detect_image(self, screenshot, arrow_template, threshold=0.1):
+    def detect_image(self, screenshot, template, threshold=0.1):
         try:
-            result = cv2.matchTemplate(screenshot, arrow_template, method)
+            result = cv2.matchTemplate(screenshot, template, method)
             min_val, _, min_loc, _ = cv2.minMaxLoc(result)
-            print(f"Min value: {min_val}")
-            return min_val < threshold, min_loc
+            return (min_val < threshold), min_loc
         except Exception as e:
             print(f"Detection error: {e}")
             return False, (0, 0)
 
-    def process_screenshots(self):
-        while self.running:
-            try:
-                if not self.screenshot_queue.empty():
-                    screenshot = self.screenshot_queue.get()
-                    
-                    icon_detected, loc = self.detect_image(screenshot, self.icon_template, 0.1)
+    def process_frame(self, screenshot):
+        # Check if frame is different from previous
+        current_hash = hashlib.md5(screenshot.tobytes()).hexdigest()
+        if current_hash == self.last_hash:
+            return None
+        self.last_hash = current_hash
 
-                    # Process regions in color
-                    player_pos = parse_coordinates(self.process_region(screenshot, 'player_pos'))
-                    depart = self.process_region(screenshot, 'depart')
-                    arrow_pos = 'none'
+        results = {}
+        
+        # Detect main icon
+        icon_detected, loc = self.detect_image(screenshot, self.icon_template, 0.1)
+        results['icon_detected'] = icon_detected
+        
+        if icon_detected:
+            # Process player position
+            results['player_pos'] = parse_coordinates(
+                self.process_region(screenshot, 'player_pos')
+            )
 
-                    # Dynamic indices region and arrow detection
-                    indices = ""
-                if icon_detected:
-                    icon_x, icon_y = loc
+            # Process depart text
+            results['depart'] = self.process_region(screenshot, 'depart')
 
-                    # Adjusted arrow detection region (0-40 width, same Y-axis)
-                    arrow_region = screenshot[
-                        icon_y - 20: icon_y + 30,
-                        0:40 
-                    ]
-                    
-                    # Arrow detection
-                    for arrow, name in [(self.top_arrow, "top"),
-                                      (self.bottom_arrow, "down"),
-                                      (self.left_arrow, "left"),
-                                      (self.right_arrow, "right")]:
-                        detected, _ = self.detect_image(arrow_region, arrow, 0.1)
-                        if detected:
-                            print(f"{name} arrow detected: {_}")
-                            arrow_pos = name
-                            break
+            # Detect arrows
+            icon_x, icon_y = loc
+            arrow_region = screenshot[
+                max(0, icon_y-20):min(screenshot.shape[0], icon_y+30),
+                0:40
+            ]
+            results['arrow'] = 'none'
+            for name, arrow in self.arrows.items():
+                detected, _ = self.detect_image(arrow_region, arrow, 0.1)
+                if detected:
+                    results['arrow'] = name
+                    break
 
-                    # Indices processing
-                    indices_roi = screenshot[
-                        max(0, icon_y-10):min(screenshot.shape[0], icon_y+20),
-                        37:150  # Adjusted indices region
-                    ]
-                    indices = self.process_region_image(indices_roi)
-                else:
-                    indices = self.process_region(screenshot, 'indices')
+            # Process indices
+            indices_roi = screenshot[
+                max(0, icon_y-10):min(screenshot.shape[0], icon_y+20),
+                37:150
+            ]
+            results['indices'] = self.process_region_image(indices_roi)
+        else:
+            results['error'] = 'Icon not detected'
 
-                # Print results
-                print(f"\nIcon detected: {icon_detected}")
-                print(f"Player position: {player_pos}")
-                print(f"Depart: {depart}")
-                print(f"Arrow direction: {arrow_pos}")
-                print(f"Indices:\n{indices}")
-                print("-" * 50)
-                    
-            except Exception as e:
-                print(f"Error processing screenshot: {e}")
-            
-            time.sleep(0.1)
+        return results
 
     def process_region_image(self, image):
-        """Process color images directly"""
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         return pytesseract.image_to_string(rgb_image, config=r'--oem 3 --psm 6').strip()
-
-    def capture_screenshot(self):
-        while self.running:
-            with mss() as sct:
-                monitor = {"top": 20, "left": 1, "width": 322, "height": 410}
-                # Convert RGBA to BGR format (3 channels)
-                screenshot = cv2.cvtColor(np.array(sct.grab(monitor)), cv2.COLOR_RGBA2BGR)
-                current_hash = hashlib.md5(screenshot.tobytes()).hexdigest()
-                if current_hash != self.last_hash:
-                    self.last_hash = current_hash
-                    if self.screenshot_queue.full():
-                        self.screenshot_queue.get()
-                    self.screenshot_queue.put(screenshot)
-                time.sleep(0.1)
 
     def process_region(self, image, region_name):
         region = self.regions[region_name]
@@ -145,18 +112,38 @@ class TreasureHuntMonitor:
         return text
 
     def run(self):
-        capture_thread = threading.Thread(target=self.capture_screenshot)
-        process_thread = threading.Thread(target=self.process_screenshots)
-        capture_thread.start()
-        process_thread.start()
+        monitor_region = {"top": 20, "left": 1, "width": 322, "height": 410}
+        
         try:
             while True:
+                # Capture screenshot
+                screenshot = cv2.cvtColor(np.array(self.sct.grab(monitor_region)), cv2.COLOR_RGBA2BGR)
+                
+                # Process frame
+                results = self.process_frame(screenshot)
+                
+                if results:
+                    return(self.print_results(results))
+                
                 time.sleep(0.1)
+                
         except KeyboardInterrupt:
-            self.running = False
-            capture_thread.join()
-            process_thread.join()
-            print("Monitoring stopped")
+            print("\nMonitoring stopped")
+
+    def print_results(self, results):
+        print("\n" + "="*40)
+        if 'error' in results:
+            print(results['error'])
+            return
+
+        print(f"Icon detected: {results['icon_detected']}")
+        if results['icon_detected']:
+            print(f"Player position: {results['player_pos']}")
+            print(f"Depart text: {results['depart']}")
+            print(f"Arrow direction: {results['arrow']}")
+            print(f"Indices:\n{results['indices']}")
+            return results
+        print("="*40 + "\n")
 
 def main():
     monitor = TreasureHuntMonitor()
