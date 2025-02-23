@@ -1,9 +1,11 @@
 import pyautogui
 import time
+import re
 import uinput
 from concurrent.futures import ThreadPoolExecutor
 from capture_screnn import TreasureHuntMonitor
 from req_positions import get_positions
+from parse_coordinate import find_closest_zaap
 
 
 
@@ -27,8 +29,9 @@ def create_mouse():
 # Simulate a mouse click
 def click(device, button=uinput.BTN_LEFT):
     device.emit(button, 1)  # Press the button
-    time.sleep(0.05)        # Short delay for the click
+    time.sleep(0.09)        # Short delay for the click
     device.emit(button, 0)  # Release the button
+    time.sleep(5)        # Short delay before moving again
 
 # Move the mouse and click
 def move_and_click(device, rel_x, rel_y):
@@ -48,22 +51,66 @@ mouse = create_mouse()
 # Arrow direction: left
 # Indices:
 # sneaky Drheller
+
+
 def main():
     seq = TreasureHuntMonitor()
 
+    #/ go to the closest zaap
+    monitor =seq.run()
+    depart = monitor['depart']
+
+    if monitor['depart'] != depart:
+        zaap = find_closest_zaap(monitor['depart'])
+        pyautogui.press('h')
+        time.sleep(10)
+        pyautogui.moveTo(530, 430)
+        click(mouse)
+
+        pyautogui.write(zaap, interval=0.1)
+        pyautogui.press('enter')
+        time.sleep(1)
+        if monitor['depart'] != depart:
+            pyautogui.press('tab')
+            pyautogui.write(f'/travel {monitor['depart'][1:-1]}', interval=0.1)
+            time.sleep(1)
+            pyautogui.press('enter',3,2)
+            while monitor['depart'] != depart:
+                time.sleep(4)
+                monitor = seq.run()
     try:
         while True:
             print("Starting sequence...")
             time.sleep(4)  # Wait for 4 seconds before starting
+            monitor = seq.run()
+            loc = get_positions("en", monitor["player_pos"][1:-1], monitor["arrow"], 10, monitor['indices'])
 
-            # Move the mouse and click at (100, 100) relative to the current position
-            move_and_click(mouse, 100, 100)
+            pyautogui.press('tab')          # Press the Tab key
+            pyautogui.write(f'/travel {loc}', interval=0.1)
+            pyautogui.press('enter')
+            time.sleep(1)
+            pyautogui.press('enter',presses=3)
 
-            # Simulate keyboard actions
-            pyautogui.press('tab')            # Press the Tab key
-            pyautogui.write() # Type the text
-            pyautogui.press('enter')         # Press Enter
-            pyautogui.press('enter')          # Press Enter again
+            print(f'{monitor['depart'][1:-1]}  ->  {loc}')
+
+            while monitor['player_pos'] and loc != monitor['player_pos'][1:-1]:
+                time.sleep(5)
+                monitor = seq.run()
+            
+            if loc == monitor['player_pos'][1:-1]:
+                print("You have reached the destination")
+                pyautogui.moveTo(monitor['pin_pos'][0]+8,monitor['pin_pos'][1]+28)
+                click(mouse)
+                continue
+            #check if the user reaches the distination 
+            # print(monitor)
+
+    #         move_and_click(mouse, 100, 100)
+    #         # # Simulate keyboard actions
+    #         # pyautogui.press('tab')          # Press the Tab key
+    #         # pyautogui.write('hello') # Type the text
+    #         # pyautogui.press('enter')         # Press Enter
+    #         # pyautogui.press('enter')          # Press Enter again
 
             print("Sequence completed. Waiting for the next iteration...")
     except KeyboardInterrupt:

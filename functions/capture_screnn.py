@@ -10,8 +10,12 @@ method = cv2.TM_SQDIFF_NORMED  # Using squared difference normalized method
 
 def parse_coordinates(input_string):
     numbers = re.findall(r'-?\d+', input_string)
-    return (int(numbers[0]), int(numbers[1])) if len(numbers) >= 2 else None
+    if len(numbers) >= 2:
+        return f"[{numbers[0]},{numbers[1]}]"
+    return None
 
+# return the pin position  / and the valid button when no white pin and the valid is green in the same time
+# return the fight button position
 class TreasureHuntMonitor:
     def __init__(self):
         self.sct = mss()
@@ -21,7 +25,7 @@ class TreasureHuntMonitor:
         # Define regions of interest
         self.regions = {
             'player_pos': {"top": 68, "left": 0, "width": 90, "height": 26},
-            'depart': {"top": 227, "left": 30, "width": 250, "height": 44},
+            'depart': {"top": 227, "left": 81, "width": 90, "height": 20},
             'indices': {"top": 250, "left": 1, "width": 322, "height": 500}
         }
         
@@ -55,6 +59,7 @@ class TreasureHuntMonitor:
         # Detect main icon
         icon_detected, loc = self.detect_image(screenshot, self.icon_template, 0.1)
         results['icon_detected'] = icon_detected
+        results['pin_pos'] = loc
         
         if icon_detected:
             # Process player position
@@ -136,18 +141,11 @@ class TreasureHuntMonitor:
             print(results['error'])
             return
 
-        print(f"Icon detected: {results['icon_detected']}")
+        # print(f"Icon detected: {results['icon_detected']}")
         if results['icon_detected']:
             print(f"Player position: {results['player_pos']}")
             print(f"Depart text: {results['depart']}")
             print(f"Arrow direction: {results['arrow']}")
             print(f"Indices:\n{results['indices']}")
             return results
-        print("="*40 + "\n")
-
-def main():
-    monitor = TreasureHuntMonitor()
-    monitor.run()
-
-if __name__ == "__main__":
-    main()
+        # print("="*40 + "\n")
