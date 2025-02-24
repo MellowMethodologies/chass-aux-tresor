@@ -58,6 +58,6 @@ Trool Fair[-11,-36]
         
         if distance < min_distance:
             min_distance = distance
-            closest_zaap = name
+            closest_zaap = name , (x, y)
 
     return closest_zaap

@@ -1,6 +1,8 @@
 import pyautogui
+import time
+from find_phorreur import detect_screen_change
 
-def move_maps(position, x, arrow, t, X=10):
+def move_maps(position, images, arrow, t, X=10):
     # Extract coordinates from position string
     try:
         coords = eval(position)  # Converts '[x,y]' to tuple
@@ -8,35 +10,30 @@ def move_maps(position, x, arrow, t, X=10):
     except (SyntaxError, TypeError):
         print("Invalid position format. Use '[x,y]'")
         return False
-
-    tries = 0
-    while tries < X:
-        # Move to the next map using alt + arrow key
-        pyautogui.keyDown('alt')
-        pyautogui.press(arrow)
-        pyautogui.keyUp('alt')
-        
-        # Wait for map transition
-        pyautogui.sleep(t)
-        
+    image_pos = None
         # Look for the image X times
-        for _ in range(x):
-            # Try to find the image on screen
+    for _ in range(X):
+            # Try each image in the list
+        for image in images:
             try:
                 # Using grayscale=True for better matching
-                image_pos = pyautogui.locateCenterOnScreen('x.png', confidence=0.8, grayscale=True)
+
+                image_pos = pyautogui.locateCenterOnScreen(image, confidence=0.69)
                 if image_pos:
-                    # Click on the found image
-                    pyautogui.click(image_pos)
                     return True
             except pyautogui.ImageNotFoundException:
-                pass
+                continue
+        if image_pos is None:
+            pyautogui.keyDown('alt')
+            pyautogui.press(arrow)
+            pyautogui.keyUp('alt')
+            detect_screen_change([68, 0, 90, 26])
             
             # Short pause between checks
-            pyautogui.sleep(0.5)
+        time.sleep(0.5)
         
-        tries += 1
     
     # If we've exhausted all tries
-    print(f"Failed to find image after {X} attempts")
+    print(f"Failed to find any of the images after {X} attempts")
     return False
+
