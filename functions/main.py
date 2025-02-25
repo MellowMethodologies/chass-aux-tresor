@@ -95,7 +95,7 @@ def main():
             time.sleep(4)  # Wait for 4 seconds before starting
             monitor = seq.run()
             loc = get_positions("en", monitor['player_pos'][1:-1], monitor["arrow"], 10, monitor['indices'])
-            while loc == 'dr' and move_maps('[-10,-30]', ['../screens/drheller/drheller.png','../screens/drheller/drheller_back.png'], monitor['arrow'],0, 1) :
+            while loc == 'dr' and move_maps('[-10,-30]', ['../screens/drheller/drheller.png','../screens/drheller/drheller_back.png'], monitor['arrow'],0, 10) :
                 print("drheller found")
                 time.sleep(1)
                 pyautogui.moveTo(monitor['pin_pos'][0]+8, monitor['pin_pos'][1]+28)

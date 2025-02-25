@@ -1,5 +1,3 @@
-import difflib
-
 list_hunt_clues = [{
 			'x': "-61",
 			'y': "-50",
@@ -18813,7 +18811,7 @@ list_hunt_clues = [{
 			'y': '14',
 			'clues': ['94', '41', '69']
 		}]
-
+		
 list_hint_id = [{
 			'clueid': '0',
 			'hintfr': "???",
@@ -19747,88 +19745,68 @@ list_hint_id = [{
 		}]
     
 
-def get_positions(language, coordinates, direction_string, limit, indice):
-    # Extract x and y from the coordinates string
-    try:
-        x, y = eval(coordinates)  # Convert string '[0,0]' to tuple (0, 0)
-    except (SyntaxError, TypeError):
-        return "Erreur: Les coordonnées doivent être au format '[x,y]'"
+def find_first_clue_map(position, direction, clue, lang='fr'):
 
-    # Mapping des directions
-    direction_map = {
-        "right": "right",
-        "down": "down",
-        "left": "left",
-        "up": "up"
-    }
-    direction = direction_map.get(direction_string.lower(), "right")
+    # Parse position
+    pos_str = position.strip('[]').split(',')
+    player_x = int(pos_str[0])
+    player_y = int(pos_str[1])
     
-    # Use our local function instead of API call
-    position = f"[{x},{y}]"
-    lang_map = {"fr": "fr", "en": "en", "es": "es"}
-    lang = lang_map.get(language, "fr")
+    # Sample data - replace with your actual data
+    # Convert input clue to lowercase for case-insensitive matching
+    clue = clue.lower()
     
-    # Get clues from nearby maps using our function
-    maps_data = find_nearest_maps(position, direction, lang, limit)
+    # Get the language key based on the lang parameter
+    lang_key = 'hintfr' if lang == 'fr' else 'hinten' if lang == 'en' else 'hintes'
     
-    # Collecte de tous les POIs avec leurs positions
-    pois = []
-    for location in maps_data:
-        for clue_name in location.get('clues', []):
-            if clue_name:
-                pois.append({
-                    'name': clue_name,
-                    'x': location['position'][0],
-                    'y': location['position'][1],
-                    'score': 0
-                })
-
-    if not pois:
-        return "dr"
-
-    # Recherche exacte
-    exact_match = next((p for p in pois if p['name'].lower() == indice.lower()), None)
-    if exact_match:
-        return f"{exact_match['x']},{exact_match['y']}"
-
-    # Calcul de similarité
-    for p in pois:
-        seq = difflib.SequenceMatcher(None, p['name'].lower(), indice.lower())
-        p['score'] = seq.ratio()
-
-    # Tri par meilleur score
-    best_match = max(pois, key=lambda x: x['score'])
-    # Seuil de similarité (ajuster selon besoin)
-    if best_match['score'] > 0.6:
-        return f'{best_match["x"]},{best_match["y"]}'
-    else:
-        indice_lower = indice.lower()
+    # Find clue IDs that match the clue text
+    matching_clue_ids = []
+    for hint in list_hint_id:
+        if hint[lang_key].lower() == clue:
+            matching_clue_ids.append(hint['clueid'])
+    
+    if not matching_clue_ids:
+        return None  # No matching clue found
+    
+    # Sort clues by proximity in the requested direction
+    valid_spots = []
+    for spot in list_hunt_clues:
+        spot_x = int(spot['x'])
+        spot_y = int(spot['y'])
         
-        if "drheller" in indice_lower:
-            return "dr"
-        
-        drheller_similarity = difflib.SequenceMatcher(None, "drheller", indice_lower).ratio()
-        
-        if drheller_similarity > 0.7:  # You can adjust this threshold
-            return "dr"
+        # Check if any clue IDs match
+        match_found = False
+        for clue_id in matching_clue_ids:
+            if clue_id in spot['clues']:
+                match_found = True
+                break
+                
+        if match_found:
+            # Calculate distance in given direction
+            if direction == 'left' and spot_x < player_x:
+                distance = player_x - spot_x
+                valid_spots.append((spot_x, spot_y, distance))
+            elif direction == 'right' and spot_x > player_x:
+                distance = spot_x - player_x
+                valid_spots.append((spot_x, spot_y, distance))
+            elif direction == 'up' and spot_y < player_y:
+                distance = player_y - spot_y
+                valid_spots.append((spot_x, spot_y, distance))
+            elif direction == 'down' and spot_y > player_y:
+                distance = spot_y - player_y
+                valid_spots.append((spot_x, spot_y, distance))
     
-        return None
+    if not valid_spots:
+        return None  # No spots in the requested direction
+    
+    # Sort by distance (third element in the tuple)
+    valid_spots.sort(key=lambda x: x[2])
+    
+    # Return the closest match
+    return (valid_spots[0][0], valid_spots[0][1])
 
-# The function we implemented earlier (needed for the above code to work)
+
 def find_nearest_maps(position, direction, lang='fr', limit=10):
-    """
-    Find the nearest maps with their clues to player position in given direction.
-    Works with global list_hunt_clues and list_hint_id.
-    
-    Args:
-        position (str): Player position as "[x,y]"
-        direction (str): Direction to search ("left", "right", "up", "down", "all")
-        lang (str): Language for clue description ('fr', 'en', 'es')
-        limit (int): Maximum number of maps to return
-    
-    Returns:
-        list: List of dicts with map info {position: [x, y], clues: list, distance: float}
-    """
     # Parse position
     pos_str = position.strip('[]').split(',')
     player_x = int(pos_str[0])
@@ -19885,3 +19863,75 @@ def find_nearest_maps(position, direction, lang='fr', limit=10):
     
     # Return the nearest maps up to the limit
     return valid_maps[:limit]
+
+
+def get_nearby_clues(position, direction, lang='fr', limit=10):
+    # Parse position
+    pos_str = position.strip('[]').split(',')
+    player_x = int(pos_str[0])
+    player_y = int(pos_str[1])
+    
+    # Get the language key based on the lang parameter
+    lang_key = 'hintfr' if lang == 'fr' else 'hinten' if lang == 'en' else 'hintes'
+    
+    # Create a lookup dictionary for clue IDs
+    clue_lookup = {hint['clueid']: hint[lang_key] for hint in list_hint_id}
+    
+    # List to store maps with distance
+    all_maps = []
+    
+    # Process each map location
+    for spot in list_hunt_clues:
+        spot_x = int(spot['x'])
+        spot_y = int(spot['y'])
+        
+        # Check direction constraint
+        valid_direction = False
+        if direction == 'all':
+            valid_direction = True
+        elif direction == 'left' and spot_x < player_x:
+            valid_direction = True
+        elif direction == 'right' and spot_x > player_x:
+            valid_direction = True
+        elif direction == 'up' and spot_y < player_y:
+            valid_direction = True
+        elif direction == 'down' and spot_y > player_y:
+            valid_direction = True
+            
+        if valid_direction:
+            # Calculate euclidean distance for sorting
+            distance = ((spot_x - player_x) ** 2 + (spot_y - player_y) ** 2) ** 0.5
+            all_maps.append({
+                'position': [spot_x, spot_y],
+                'clues': spot['clues'],
+                'distance': distance
+            })
+    
+    # Sort by distance
+    all_maps.sort(key=lambda x: x['distance'])
+    
+    # Get the closest 'limit' maps
+    closest_maps = all_maps[:limit]
+    
+    # Extract all clues from these maps
+    all_clues = []
+    
+    for map_data in closest_maps:
+        for clue_id in map_data['clues']:
+            if clue_id in clue_lookup:
+                clue_name = clue_lookup[clue_id]
+                if clue_name != "???" and clue_name not in all_clues:
+                    all_clues.append(clue_name)
+    all_clues.sort()
+    return all_clues
+
+
+# Example usage
+if __name__ == "__main__":
+    # Test the function
+    position = "[-15, -57]"
+    clues = get_nearby_clues(position, "left", "en", 10)
+    
+    print(f"All clues in the 10 closest maps to {position} (to the left):")
+    for i, clue in enumerate(clues, 1):
+    	print(f"{i} {clue}")

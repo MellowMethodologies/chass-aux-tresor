@@ -2,6 +2,7 @@ import pyautogui
 import time
 from find_phorreur import detect_screen_change
 
+
 def move_maps(position, images, arrow, t, X=10):
     # Extract coordinates from position string
     try:
@@ -18,7 +19,7 @@ def move_maps(position, images, arrow, t, X=10):
             try:
                 # Using grayscale=True for better matching
 
-                image_pos = pyautogui.locateCenterOnScreen(image, confidence=0.69)
+                image_pos = pyautogui.locateCenterOnScreen(image, confidence=0.629)
                 if image_pos:
                     return True
             except pyautogui.ImageNotFoundException:
@@ -27,7 +28,7 @@ def move_maps(position, images, arrow, t, X=10):
             pyautogui.keyDown('alt')
             pyautogui.press(arrow)
             pyautogui.keyUp('alt')
-            detect_screen_change([68, 0, 90, 26])
+            detect_screen_change([0, 70, 77, 25])
             
             # Short pause between checks
         time.sleep(0.5)
@@ -36,4 +37,3 @@ def move_maps(position, images, arrow, t, X=10):
     # If we've exhausted all tries
     print(f"Failed to find any of the images after {X} attempts")
     return False
-
